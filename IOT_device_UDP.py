@@ -45,7 +45,8 @@ class Device:
 
     def send_data(self):
         print("Device is sending data")
-        self.udp_sock.sendto(pickle.dumps((self.ip_address, self.daily_measurements)), self.gateway_address)
+        starting_time = time.perf_counter_ns()
+        self.udp_sock.sendto(pickle.dumps((self.ip_address, starting_time, self.daily_measurements)), self.gateway_address)
         data, gateway_address = self.udp_sock.recvfrom(4096)
         time.sleep(2)
         if data:
@@ -89,6 +90,7 @@ def main():
     device_mac_address = str(input("Insert devices MAC_ADDRESS: "))
     device = Device(device_mac_address)
     while True:
+        print("Adding new measurement")
         device.add_new_measurement(current_environment.get_current_measurement())
         time.sleep(1)
 

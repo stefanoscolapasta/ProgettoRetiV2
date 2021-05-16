@@ -25,6 +25,9 @@ while True:
     print("Received request for:",data)
     mac_address = data.decode('utf-8')
     if mac_address not in arp_table.keys():
-        print(find_available_ip(arp_table))
-        arp_table[mac_address] = find_available_ip(arp_table)
+        print("New device is requiring IP address")
+        new_available_ip_address = find_available_ip(arp_table)
+        print("Device ", mac_address, " is granted of ", new_available_ip_address, " ip address")
+        arp_table[mac_address] = new_available_ip_address
+        
     sock.sendto(arp_table[mac_address].encode('utf-8'), address)

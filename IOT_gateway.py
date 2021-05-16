@@ -15,7 +15,7 @@ class Gateway:
         self.udp_sock.bind(('localhost', 6001))
         self.dhcp_address = ('localhost', self.DHCP_PORT)
         self.udp_receive_address = self.retrieve_address_from_dhcp_server()
-        self.reopen_tcp_socket()   
+        self.open_tcp_socket()   
 
     def retrieve_address_from_dhcp_server(self):
         self.udp_sock.sendto(str(self.mac_address).encode('utf-8'), self.dhcp_address)
@@ -24,7 +24,7 @@ class Gateway:
             return data.decode('utf-8')
         return ''
 
-    def reopen_tcp_socket(self):
+    def open_tcp_socket(self):
         self.tcp_sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
         self.tcp_server_address = ('localhost', 3001)
 
@@ -54,24 +54,30 @@ class Gateway:
         message = self.get_tcp_sock().recv(1024)
         print(message.decode("utf-8"))
         self.get_tcp_sock().close()
-        self.reopen_tcp_socket()
+        self.open_tcp_socket()
     
     def confirm_reception(self):
         for address in self.get_devices().keys():
             self.get_udp_sock().sendto("Measurment has been delivered".encode("utf-8"), self.get_connections_address()[address])
+
 
 def main():
     gateway_mac_address = str(input("Inserisci indirizzo mac del gateway: "))
     gateway = Gateway(gateway_mac_address)
     # Attendo che i devices si colleghino
     while True:
+        print("Gateway waiting to receive data from device")
         data, real_address = gateway.get_udp_sock().recvfrom(4096)
-        ip_address, measurements = pickle.loads(data)
+        arrival_time = time.perf_counter_ns()
+        ip_address, sending_time, measurements = pickle.loads(data)
+        print("Time to send udp datagram: ", (arrival_time-sending_time))
+        print("Data received from device with ip address: ", ip_address)
         gateway.get_connections_address()[ip_address] = real_address
         gateway.get_devices()[ip_address] = measurements
-        if (len(gateway.get_devices().keys())) == 1:
+        if (len(gateway.get_devices().keys())) == 4:
             gateway.send_data_to_server()
         gateway.confirm_reception()
             
+
 if __name__ == '__main__':
     main()
