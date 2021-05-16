@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun May 16 15:17:05 2021
-
-@author: kelvi
-"""
-
 def create_packet(ethernet_header, IP_header, message):
     return ethernet_header + IP_header + message
 

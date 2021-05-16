@@ -2,27 +2,50 @@ import socket as sk
 import pickle
 from IOT_device_UDP import Measurement
 
-server_port = 3001
-server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
-server_socket.bind(('',server_port))
-server_socket.listen(1)
-print ('Server ready to receive connections:',server_port)
-while True:
-    print ('Ready to serve...')
-    connection_socket, addr = server_socket.accept()
-    message = connection_socket.recv(1024)
-    data = pickle.loads(message)
+class TcpServer:
 
-    for address in data.keys():
-        print("\n\n--------------------------")
-        print("address: ", address)
-        print("MEASUREMENTS\n")
-        for measure in data[address]:
-            print(measure.to_string())
-        print("--------------------------\n\n")
-    connection_socket.send("Mesurement received".encode())
-    connection_socket.close()
+    def __init__(self):
+        self.server_port = 3001
+        self.server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
+        self.server_socket.bind(('localhost', self.server_port))
+        self.server_socket.listen(1)
 
-serverSocket.close()
-connection_socket.close()
-sys.exit() ## Termina il programma dopo aver inviato i dati corrispondenti
+    def get_tcp_sock(self):
+        return self.server_socket
+
+    def close_server_socket(self):
+        self.server_socket.close()
+
+def main():
+
+    server = TcpServer()
+
+    while True:
+        print ('Ready to serve...')
+        connection_socket, addr = server.get_tcp_sock().accept()
+        print("SERVER ACCEPTING CONNECTION FROM ", addr)
+        print("Waiting to receive message")
+        
+        try:
+            message = connection_socket.recv(1024)
+            data = pickle.loads(message)
+
+            print("Data received from GATEWAY")
+
+            for address in data.keys():
+                print("\n\n--------------------------")
+                print("address: ", address)
+                print("MEASUREMENTS\n")
+                for measure in data[address]:
+                    print(measure.to_string())
+                print("--------------------------\n\n")
+
+        except Exception as error:
+            print(error)
+
+        connection_socket.send("Mesurement received".encode())
+        connection_socket.close()
+
+
+if __name__ == '__main__':
+    main()

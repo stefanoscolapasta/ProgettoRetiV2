@@ -1,6 +1,7 @@
 import socket as sk
 import time, pickle, os, random
 from datetime import datetime
+from udp_datagram import UdpDatagram
 
 class Device:
 
@@ -11,21 +12,21 @@ class Device:
 
     def __init__(self, mac_address):
         self.log_filename = "DailyDeviceLog_" + str(mac_address) + ".json" 
-        self.mac_address = mac_address
         self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
         self.gateway_address = ('localhost', self.GATEWAY_PORT)
         self.dhcp_address = ('localhost', self.DHCP_PORT)
-        self.ip_address = self.retrieve_address_from_dhcp_server()
-
+        self.mac_address = mac_address
+        # richiesta di un indirizzo ip dal dhcp
+        self.ip_address, self.gateway_ip = self.retrieve_address_from_dhcp_server()
         print(self.ip_address)
-        
         self.create_file()
 
     def retrieve_address_from_dhcp_server(self):
         self.udp_sock.sendto(str(self.mac_address).encode('utf8'), self.dhcp_address)
         data, server = self.udp_sock.recvfrom(4096)
         if data:
-            return data.decode('utf8')
+            ip_data = data.decode('utf8').split("_")
+            return (ip_data[0], ip_data[1])
         return ''
 
     def close_socket(self):
@@ -33,7 +34,6 @@ class Device:
 
     def add_new_measurement(self, measurement):
         self.daily_measurements.append(measurement)
-
         if os.path.exists(self.log_filename):
             with open(self.log_filename, 'a') as file:
                 file.write(measurement.to_string())
@@ -46,12 +46,22 @@ class Device:
     def send_data(self):
         print("Device is sending data")
         starting_time = time.perf_counter_ns()
-        self.udp_sock.sendto(pickle.dumps((self.ip_address, starting_time, self.daily_measurements)), self.gateway_address)
-        data, gateway_address = self.udp_sock.recvfrom(4096)
+        
+        self.udp_sock.settimeout(2)
+        received = False
+        while not received:
+            try:
+                self.udp_sock.sendto(pickle.dumps((self.ip_address, self.gateway_ip, starting_time, self.daily_measurements)), self.gateway_address)
+                self.udp_sock.settimeout(2)
+                data, gateway_address = self.udp_sock.recvfrom(4096) # attesa di conferma da parte del gateway
+                if data:
+                    received = True
+            except sk.timeout:
+                print("Timeout occurred, trying again...")
         time.sleep(2)
         if data:
             print("Server(", gateway_address, ") answer: ", data.decode('utf8'))
-        #after sending data I reset the dictionary to not keep in ram useless data
+        # after sending data I reset the dictionary to not keep in ram useless data
         self.daily_measurements.clear()    
 
     def create_file(self):
