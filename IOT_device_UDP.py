@@ -1,7 +1,6 @@
 import socket as sk
 import time, pickle, os, random
 from datetime import datetime
-from udp_datagram import UdpDatagram
 
 gateway_mac = "10:AF:CB:EF:19:CF"
 
@@ -46,14 +45,12 @@ class Device:
             open(self.log_filename, 'a').close()
 
     def send_data(self):
-        print("Device is sending data")
-        starting_time = time.perf_counter_ns()
-        
+        print("Device is sending data")    
         self.udp_sock.settimeout(2)
         received = False
         while not received:
             try:
-                self.udp_sock.sendto(pickle.dumps((self.ip_address, self.gateway_ip, starting_time, self.daily_measurements)), self.gateway_address)
+                self.udp_sock.sendto(pickle.dumps((self.ip_address, self.gateway_ip, time.time_ns(), self.daily_measurements)), self.gateway_address)
                 self.udp_sock.settimeout(2)
                 data, gateway_address = self.udp_sock.recvfrom(4096) # attesa di conferma da parte del gateway
                 if data:
