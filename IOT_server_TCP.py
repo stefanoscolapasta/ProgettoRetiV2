@@ -1,15 +1,17 @@
 import socket as sk
 import pickle, time
 from IOT_device_UDP import Measurement
+from IOT_packet import Packet
+from IOT_simulation import Simulation
 
 class TcpServer:
 
     def __init__(self):
+        self.sim = Simulation()
         self.server_port = 3001
         self.server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
         self.server_socket.bind(('localhost', self.server_port))
         self.server_socket.listen(1)
-        self.gateway_ip_address = "10.10.10.1"
 
     def get_tcp_sock(self):
         return self.server_socket
@@ -18,12 +20,11 @@ class TcpServer:
         self.server_socket.close()
 
     def get_correct_gateway_ip_address(self):
-        return self.gateway_ip_address
+        return self.sim.get_gateway_send_ip()
 
 def main():
-
+    simulation = Simulation()
     server = TcpServer()
-
     while True:
         print ('Ready to serve...')
         connection_socket, addr = server.get_tcp_sock().accept()
@@ -32,25 +33,37 @@ def main():
         
         try:
             message = connection_socket.recv(1024)
-            arrival_time = time.time_ns()       
-            sender_ip_address, time_of_sending, data = pickle.loads(message)
-            time_for_receipt = arrival_time - time_of_sending
+            arrival_time = time.time_ns()      
+            pkt = pickle.loads(message)
+            print(pkt.to_string())
+            time_for_receipt = arrival_time - pkt.get_sending_time()
             print("Time to receive data from gateway over a TCP connection: ", time_for_receipt, "ns")
-            if sender_ip_address == server.get_correct_gateway_ip_address():
+            # controllare destination_ip
+            if pkt.get_source_ip() == server.get_correct_gateway_ip_address():
+                connection_socket.send(
+                    pickle.dumps(Packet(simulation.get_server_mac(),
+                        simulation.get_gateway_send_mac(),
+                        simulation.get_server_ip(),
+                        simulation.get_gateway_send_ip(),
+                        "Meausurements receiceived"    
+                    )
+                ))
                 print("Data received from GATEWAY")
-
+                data = pkt.get_payload()
                 for address in data.keys():
-                    print("\n\n--------------------------")
-                    print("address: ", address)
-                    print("MEASUREMENTS\n")
                     for measure in data[address]:
-                        print(measure.to_string())
-                    print("--------------------------\n\n")
-                    
-                connection_socket.send("Mesurement received".encode("utf-8"))
+                        print(address,"-",measure.get_time_of_measurement(),"-",measure.get_temperature(),"-",measure.get_humidity())
+                    print("--------------------------\n\n")    
             else:
                 print("Permission denied")
-                connection_socket.send("Were you looking for this IP_address?".encode("utf-8"))
+                connection_socket.send(
+                    pickle.dumps(Packet(simulation.get_server_mac(),
+                        simulation.get_gateway_send_mac(),
+                        simulation.get_server_ip(),
+                        simulation.get_gateway_send_ip(),
+                        "Were you looking for this IP_address?"    
+                    )
+                ))
         except Exception as error:
             print(error)
         

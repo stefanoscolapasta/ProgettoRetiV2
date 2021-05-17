@@ -35,11 +35,11 @@ def main():
     dhcp_udp_server = SimpleDhcp()
 
     while True:
-        print('\n\r waiting to receive message...')
+        print('\n\rwaiting to receive message...')
         # ascolto richieste di indirizzi ip
         data, address = dhcp_udp_server.get_udp_sock().recvfrom(1024)
-        print("Received request for:",data)
         mac_address = data.decode('utf-8')
+        print("Received request for:",mac_address)
         if mac_address not in dhcp_udp_server.get_arp_table().keys():
             print("New device is requiring IP address")
             new_available_ip_address = dhcp_udp_server.find_available_ip_address()

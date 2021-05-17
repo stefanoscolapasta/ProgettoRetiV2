@@ -1,37 +1,32 @@
 import socket as sk
 import time, pickle, os, random
 from datetime import datetime
-
-gateway_mac = "10:AF:CB:EF:19:CF"
+import network_config as nc
+from IOT_packet import Packet
+from IOT_simulation import Simulation
 
 class Device:
-
-    DHCP_PORT = 1075
-    GATEWAY_PORT = 6001
     daily_measurements = []
     maximum_number_of_measurements_to_be_sent = 5
 
     def __init__(self, mac_address):
+        self.sim = Simulation()
         self.log_filename = "DailyDeviceLog_" + str(mac_address) + ".json" 
-        self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
-        self.gateway_address = ('localhost', self.GATEWAY_PORT)
-        self.dhcp_address = ('localhost', self.DHCP_PORT)
         self.mac_address = mac_address
         # richiesta di un indirizzo ip dal dhcp
-        self.ip_address, self.gateway_ip = self.retrieve_address_from_dhcp_server()
+        self.ip_address, self.gateway_ip = self.obtain_ip_address()
         print(self.ip_address)
         self.create_file()
 
-    def retrieve_address_from_dhcp_server(self):
-        self.udp_sock.sendto(str(self.mac_address).encode('utf8'), self.dhcp_address)
-        data, server = self.udp_sock.recvfrom(4096)
+    def obtain_ip_address(self):
+        dhcp_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
+        dhcp_socket.sendto(str(self.mac_address).encode('utf8'), nc.dhcp_address)
+        data, server = dhcp_socket.recvfrom(4096)
+        dhcp_socket.close()
         if data:
             ip_data = data.decode('utf8').split("_")
-            return (ip_data[0], ip_data[1])
+            return (ip_data[0], ip_data[1])  
         return ''
-
-    def close_socket(self):
-        self.udp_sock.close()
 
     def add_new_measurement(self, measurement):
         self.daily_measurements.append(measurement)
@@ -45,21 +40,32 @@ class Device:
             open(self.log_filename, 'a').close()
 
     def send_data(self):
-        print("Device is sending data")    
-        self.udp_sock.settimeout(2)
+        print("Device is sending data")
+        # creo la socket e la richiudo non appena ho terminato l'invio dei dati
+        # non impegnando inultimente le risorse allocate
+        gateway_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)    
         received = False
         while not received:
             try:
-                self.udp_sock.sendto(pickle.dumps((self.ip_address, self.gateway_ip, time.time_ns(), self.daily_measurements)), self.gateway_address)
-                self.udp_sock.settimeout(2)
-                data, gateway_address = self.udp_sock.recvfrom(4096) # attesa di conferma da parte del gateway
+                gateway_socket.sendto(
+                    pickle.dumps(Packet(self.mac_address,
+                        self.sim.get_gateway_recv_mac(),
+                        self.ip_address,
+                        self.sim.get_gateway_recv_ip(),
+                        self.daily_measurements)),
+                    nc.gateway_address
+                )
+                gateway_socket.settimeout(2)
+                data, gateway_address = gateway_socket.recvfrom(4096) # attesa di conferma da parte del gateway
+                pkt = pickle.loads(data)
                 if data:
                     received = True
+                    print("Gateway answer:",pkt.get_payload())
+                    print()
             except sk.timeout:
                 print("Timeout occurred, trying again...")
+        gateway_socket.close()
         time.sleep(2)
-        if data:
-            print("Server(", gateway_address, ") answer: ", data.decode('utf8'))
         # after sending data I reset the dictionary to not keep in ram useless data
         self.daily_measurements.clear()    
 
@@ -87,6 +93,8 @@ class Measurement:
             "\nTEMPERATURE: " + str(self.get_temperature()) + 
             "\nHUMIDITY: " + str(self.get_humidity())
             )
+    def __str__(self):
+        return "measure(time: " + str(self.get_time_of_measurement()) + ", temp: " + str(self.get_temperature()) + ", hum: " + str(self.get_humidity()) + ")"
 
 class Environment:
     def get_current_measurement(self):

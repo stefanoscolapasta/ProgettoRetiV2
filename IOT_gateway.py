@@ -2,65 +2,70 @@ import socket as sk
 import time, pickle, os, random
 from datetime import datetime
 from IOT_device_UDP import Measurement
-
-
-gateway_mac = "10:AF:CB:EF:19:CF"
+import network_config as nc
+from IOT_simulation import Simulation
+from IOT_packet import Packet
 
 class Gateway:
     DHCP_PORT = 1075
     devices = {} # {ip_address: measurements}
 
     def __init__(self):
-        self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
-        self.udp_sock.bind(('localhost', 6001))
-        self.dhcp_address = ('localhost', self.DHCP_PORT)
-        self.udp_interface_mac = "AF:E8:23:B4:00:D2"
-        self.udp_interface_ip_address = "192.168.1.1"
-        self.tcp_interface_mac = "FA:8E:32:4B:00:2D"
-        self.tcp_interface_ip_address = "10.10.10.1"
-        self.open_tcp_socket()   
+        self.sim = Simulation()
+        self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM) # socket per invio delle misurazioni
+        # TODO socket per dhcp
+        self.udp_sock.bind(nc.gateway_address)   
 
-    def get_udp_interface_ip_address(self):
-        return self.udp_interface_ip_address
-
-    def open_tcp_socket(self):
-        self.tcp_sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
-        self.tcp_server_address = ('localhost', 3001)
+    def get_rcv_ip_address(self):
+        return self.sim.get_gateway_recv_ip()
 
     def get_udp_sock(self):
         return self.udp_sock
-
-    def get_tcp_sock(self):
-        return self.tcp_sock
     
     def get_devices(self):
         return self.devices
-    
-    def get_device(self, address):
-        if address in self.devices.keys():
-            return self.devices[address]
-        return "Not present"
 
     def send_data_to_server(self):
         try:
-            self.get_tcp_sock().connect(self.tcp_server_address)
-            self.get_tcp_sock().send(pickle.dumps((self.tcp_interface_ip_address, time.time_ns(), self.get_devices())))
+            server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
+            server_socket.connect(nc.server_address)
+            server_socket.send(
+                pickle.dumps(Packet(self.sim.get_gateway_send_mac(),
+                    self.sim.get_server_mac(),
+                    self.sim.get_gateway_send_ip(),
+                    self.sim.get_server_ip(),
+                    self.get_devices()
+                ))
+            )
         except Exception as error:
             print(error)
-        message = self.get_tcp_sock().recv(1024)
-        print(message.decode("utf-8"))
-        self.get_tcp_sock().close()
-        self.open_tcp_socket()
+        message = server_socket.recv(1024)
+        server_socket.close()
+
+        pkt = pickle.loads(message)
+        print("Server answer:")
+        print(pkt.to_string())
         self.clear_measurments()
     
     def clear_measurments(self):
         self.get_devices().clear()
     
-    def confirm_reception(self, address):
-        self.get_udp_sock().sendto("Measurment has been delivered".encode("utf-8"), address)
+    
+    def send_answer(self, address, pkt, message):
+        self.get_udp_sock().sendto(
+            pickle.dumps(Packet(self.sim.get_gateway_recv_mac(),
+                pkt.get_source_mac(),
+                self.sim.get_gateway_recv_ip(),
+                pkt.get_source_ip,
+                message
+            )
+        ), address)
 
-    def discard_reception(self, address):
-        self.get_udp_sock().sendto("Wrong Ip address".encode("utf-8"), address)
+    def confirm_reception(self, address, pkt):
+        self.send_answer(address, pkt, "Measurements received")
+
+    def discard_reception(self, address, pkt):
+        self.send_answer(address, pkt, "Wrong Ip address")
 
 def main():
     gateway = Gateway()
@@ -70,25 +75,28 @@ def main():
         data, real_address = gateway.get_udp_sock().recvfrom(4096)
         print("Data received from device ", real_address)
         arrival_time = time.time_ns()
-        ip_address, gateway_ip, time_of_sending , measurements = pickle.loads(data)
-        time_for_receipt = arrival_time - time_of_sending
+        
+        pkt = pickle.loads(data)
+        print(pkt.to_string())
+        time_for_receipt = arrival_time - pkt.get_sending_time()
         #Effettuiamo controllo se indirizzo ip del gateway ip coincide con quello attuale corretto
-        if gateway_ip == gateway.get_udp_interface_ip_address():
-            
+        if pkt.get_destination_ip() == gateway.get_rcv_ip_address():
             print("Time to receive UDP datagram: ", time_for_receipt, "ns")
-            print("Data received from device with ip address: ", ip_address)
+            print("Data received from device with ip address: ", pkt.get_source_ip())
             # controllo che non si tratti di misurazioni gia inviate
-            if ip_address not in gateway.get_devices().keys():
-                gateway.get_devices()[ip_address] = measurements
+            if pkt.get_source_ip() not in gateway.get_devices().keys():
+                gateway.get_devices()[pkt.get_source_ip()] = pkt.get_payload()
+            else:
+                print("Discarding, waiting for other devices...")
             # invio conferma di ricezione al device
-            gateway.confirm_reception(real_address)
+            gateway.confirm_reception(real_address, pkt)
             # non appena ho ricevuto le misurazioni dagli n device invio
             # i dati al server    
-            n=1
+            n=2
             if (len(gateway.get_devices().keys())) == n:
                 gateway.send_data_to_server()
         else:
-            gateway.discard_reception(real_address)
+            gateway.discard_reception(real_address, pkt)
 
 if __name__ == '__main__':
     main()
