@@ -12,12 +12,14 @@ class Gateway:
         self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
         self.udp_sock.bind(('localhost', 6001))
         self.dhcp_address = ('localhost', self.DHCP_PORT)
-        self.udp_receive_mac = "AF:E8:23:B4:00:D2"
-        self.udp_receive_ip_address = "192.168.1.1"
+        self.udp_interface_mac = "AF:E8:23:B4:00:D2"
+        self.udp_interface_ip_address = "192.168.1.1"
+        self.tcp_interface_mac = "FA:8E:32:4B:00:2D"
+        self.tcp_interface_ip_address = "10.10.10.1"
         self.open_tcp_socket()   
 
     def get_udp_interface_ip_address(self):
-        return self.udp_receive_ip_address
+        return self.udp_interface_ip_address
 
     def open_tcp_socket(self):
         self.tcp_sock = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
@@ -40,7 +42,7 @@ class Gateway:
     def send_data_to_server(self):
         try:
             self.get_tcp_sock().connect(self.tcp_server_address)
-            self.get_tcp_sock().send(pickle.dumps(self.get_devices()))
+            self.get_tcp_sock().send(pickle.dumps((self.tcp_interface_ip_address, time.time_ns(), self.get_devices())))
         except Exception as error:
             print(error)
         message = self.get_tcp_sock().recv(1024)
@@ -65,20 +67,23 @@ def main():
         print("Gateway waiting to receive data from device")
         data, real_address = gateway.get_udp_sock().recvfrom(4096)
         print("Data received from device ", real_address)
-        arrival_time = time.perf_counter_ns()
+        arrival_time = time.time_ns()
         ip_address, gateway_ip, time_of_sending , measurements = pickle.loads(data)
+        time_for_receipt = arrival_time - time_of_sending
         #Effettuiamo controllo se indirizzo ip del gateway ip coincide con quello attuale corretto
         if gateway_ip == gateway.get_udp_interface_ip_address():
-            print("Time to receive UDP datagram: ", (arrival_time - time_of_sending))
+            
+            print("Time to receive UDP datagram: ", time_for_receipt, "ns")
             print("Data received from device with ip address: ", ip_address)
             # controllo che non si tratti di misurazioni gia inviate
             if ip_address not in gateway.get_devices().keys():
                 gateway.get_devices()[ip_address] = measurements
             # invio conferma di ricezione al device
             gateway.confirm_reception(real_address)
-            # non appena ho ricevuto le misurazioni dai 4 device invio
+            # non appena ho ricevuto le misurazioni dagli n device invio
             # i dati al server    
-            if (len(gateway.get_devices().keys())) == 1:
+            n=1
+            if (len(gateway.get_devices().keys())) == n:
                 gateway.send_data_to_server()
         else:
             gateway.discard_reception(real_address)

@@ -41,13 +41,11 @@ def main():
         print("Received request for:",data)
         mac_address = data.decode('utf-8')
         if mac_address not in dhcp_udp_server.get_arp_table().keys():
-
             print("New device is requiring IP address")
             new_available_ip_address = dhcp_udp_server.find_available_ip_address()
             print("Device ", mac_address, " is granted of ", new_available_ip_address, " ip address")
             dhcp_udp_server.get_arp_table()[mac_address] = new_available_ip_address
             
-        
         dhcp_udp_server.get_udp_sock().sendto(str(str(dhcp_udp_server.get_arp_table().get(mac_address)) + "_" + str(dhcp_udp_server.get_gateway_address())).encode('utf-8') , address)
 
 
