@@ -1,32 +1,49 @@
 import socket as sk
-import time, pickle, os, random
-from datetime import datetime
+import time, pickle, os
 import network_config as nc
 from IOT_packet import Packet
 from IOT_simulation import Simulation
+from IOT_environment import Environment
+import utils
 
 class Device:
     daily_measurements = []
     maximum_number_of_measurements_to_be_sent = 5
+    empty_payload = ""
+    unassigned_ip = "0.0.0.0"
 
     def __init__(self, mac_address):
         self.sim = Simulation()
         self.log_filename = "DailyDeviceLog_" + str(mac_address) + ".json" 
         self.mac_address = mac_address
         # richiesta di un indirizzo ip dal dhcp
-        self.ip_address, self.gateway_ip = self.obtain_ip_address()
-        print(self.ip_address)
+        print("Device requesting Ip address from DHCP server")
+        self.ip_address = self.obtain_ip_address()
+        print("Ip address received from DHCP server on gateway: ", self.ip_address)
         self.create_file()
 
     def obtain_ip_address(self):
-        dhcp_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
-        dhcp_socket.sendto(str(self.mac_address).encode('utf8'), nc.dhcp_address)
-        data, server = dhcp_socket.recvfrom(4096)
-        dhcp_socket.close()
+        dhcp_request_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
+
+        dhcp_request_socket.sendto(pickle.dumps(Packet(
+            self.mac_address, 
+            self.sim.gateway_recv_mac,
+            self.unassigned_ip, 
+            self.sim.get_gateway_recv_ip(), 
+            self.empty_payload
+        )), nc.dhcp_address)
+
+        data, server = dhcp_request_socket.recvfrom(4096)
+        pkt = pickle.loads(data)
+        
+        utils.print_packet_header(pkt, "DHCP SERVER")
+        
+        dhcp_request_socket.close()
+        
         if data:
-            ip_data = data.decode('utf8').split("_")
-            return (ip_data[0], ip_data[1])  
-        return ''
+            return pkt.get_payload() 
+
+        return self.unassigned_ip
 
     def add_new_measurement(self, measurement):
         self.daily_measurements.append(measurement)
@@ -40,14 +57,14 @@ class Device:
             open(self.log_filename, 'a').close()
 
     def send_data(self):
-        print("Device is sending data")
+        print("\nDevice is sending data to GATEWAY...\n")
         # creo la socket e la richiudo non appena ho terminato l'invio dei dati
         # non impegnando inultimente le risorse allocate
-        gateway_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)    
+        sending_socket = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)    
         received = False
         while not received:
             try:
-                gateway_socket.sendto(
+                sending_socket.sendto(
                     pickle.dumps(Packet(self.mac_address,
                         self.sim.get_gateway_recv_mac(),
                         self.ip_address,
@@ -55,52 +72,29 @@ class Device:
                         self.daily_measurements)),
                     nc.gateway_address
                 )
-                gateway_socket.settimeout(2)
-                data, gateway_address = gateway_socket.recvfrom(4096) # attesa di conferma da parte del gateway
-                pkt = pickle.loads(data)
+                sending_socket.settimeout(2)
+                data, gateway_address = sending_socket.recvfrom(4096) # attesa di conferma da parte del gateway
+                   
                 if data:
+                    pkt = pickle.loads(data)
+                    utils.print_divider()
+                    utils.print_packet_header(pkt, "GATEWAY")
                     received = True
-                    print("Gateway answer:",pkt.get_payload())
+                    print("Gateway answer:", pkt.get_payload())
+                    utils.print_divider()
+                    #empty print for spacing
                     print()
+
             except sk.timeout:
                 print("Timeout occurred, trying again...")
-        gateway_socket.close()
+
+        sending_socket.close()
         time.sleep(2)
         # after sending data I reset the dictionary to not keep in ram useless data
         self.daily_measurements.clear()    
 
     def create_file(self):
         open(str(self.log_filename), 'w').close()
-
-class Measurement:
-    def __init__(self, time, temperature, humidity):
-        self.time = time
-        self.temperature = temperature
-        self.humidity = humidity
-
-    def get_time_of_measurement(self):
-        return self.time
-
-    def get_temperature(self):
-        return self.temperature
-
-    def get_humidity(self):
-        return self.humidity
-
-    def to_string(self):
-        return str(
-            "\nTIME_OF_MEASUREMENT: " + str(self.get_time_of_measurement()) + 
-            "\nTEMPERATURE: " + str(self.get_temperature()) + 
-            "\nHUMIDITY: " + str(self.get_humidity())
-            )
-    def __str__(self):
-        return "measure(time: " + str(self.get_time_of_measurement()) + ", temp: " + str(self.get_temperature()) + ", hum: " + str(self.get_humidity()) + ")"
-
-class Environment:
-    def get_current_measurement(self):
-        random_temperature = random.randrange(-15,45)
-        random_humidity = random.randrange(0,100)
-        return Measurement(str(datetime.now()), random_temperature, random_humidity)
 
 def main():
     current_environment = Environment()
