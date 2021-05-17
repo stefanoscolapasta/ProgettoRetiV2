@@ -3,8 +3,10 @@ import time, pickle, os, random
 from datetime import datetime
 from IOT_device_UDP import Measurement
 
-class Gateway:
 
+gateway_mac = "10:AF:CB:EF:19:CF"
+
+class Gateway:
     DHCP_PORT = 1075
     devices = {} # {address: measurements}
     devices_connection_address = {} # {ip_address: connection_address}

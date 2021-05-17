@@ -2,6 +2,8 @@ import socket as sk
 import time, pickle, os, random
 from datetime import datetime
 
+gateway_mac = "10:AF:CB:EF:19:CF"
+
 class Device:
 
     DHCP_PORT = 1075
@@ -11,11 +13,11 @@ class Device:
 
     def __init__(self, mac_address):
         self.log_filename = "DailyDeviceLog_" + str(mac_address) + ".json" 
-        self.mac_address = mac_address
         self.udp_sock = sk.socket(sk.AF_INET, sk.SOCK_DGRAM)
         self.gateway_address = ('localhost', self.GATEWAY_PORT)
         self.dhcp_address = ('localhost', self.DHCP_PORT)
         self.ip_address = self.retrieve_address_from_dhcp_server()
+        self.mac_address = mac_address
 
         print(self.ip_address)
         
