@@ -5,6 +5,7 @@ from IOT_simulation import Simulation
 from IOT_packet import Packet
 from threading import Thread
 import utils
+import signal, sys
 
 class SimpleDhcp(Thread):
 
@@ -84,6 +85,11 @@ class Gateway:
     def get_devices(self):
         return self.devices
 
+    def close_gateway():
+        self.dhcp.stop_thread()
+        self.dhcp_sock.close()
+        self.recv_sock.close()
+
     def send_data_to_server(self):
         try:
             server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
@@ -97,20 +103,17 @@ class Gateway:
                     self.get_devices()
                 ))
             )
+            message = server_socket.recv(1024)
+            utils.print_pkt_size(message)
+            pkt = pickle.loads(message)
+            utils.print_packet_header(pkt, "SERVER")
+            print("Server answer:", pkt.get_payload())
+            utils.print_divider()
+            print()
         except Exception as error:
-            print("Unable to send data")
             print(error)
-        message = server_socket.recv(1024)
-        utils.print_pkt_size(message)
-        server_socket.close()
-        
-        pkt = pickle.loads(message)
-
-        utils.print_packet_header(pkt, "SERVER")
-        
-        print("Server answer:", pkt.get_payload())
-        utils.print_divider()
-        print()
+        finally:
+            server_socket.close()    
         self.clear_measurments()
     
     def clear_measurments(self):
@@ -133,12 +136,9 @@ class Gateway:
     def discard_reception(self, address, pkt):
         self.__send_answer(address, pkt, "Wrong Ip address")
 
-
-
-
-
+gateway = Gateway()
 def main():
-    gateway = Gateway()
+    global gateway
     # Attendo che i devices si colleghino
     while True:
         print("Gateway waiting to receive data from devices...\n")
@@ -170,6 +170,17 @@ def main():
         else:
             gateway.discard_reception(real_address, pkt)
 
+def signal_handler(signal, frame):
+    global gateway
+    print('Closing gateway (Ctrl+C pressed)')
+    try:
+        if gateway:
+            gateway.close_gateway()
+    finally:
+        print("Exiting...")
+        sys.exit(0)
+        
+signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == '__main__':
     main()

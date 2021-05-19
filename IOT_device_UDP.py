@@ -5,6 +5,7 @@ from IOT_packet import Packet
 from IOT_simulation import Simulation
 from IOT_environment import Environment
 import utils
+import signal,sys
 
 class Device:
     daily_measurements = []
@@ -88,6 +89,9 @@ class Device:
 
             except sk.timeout:
                 print("Timeout occurred, trying again...")
+            except Exception as err:
+                print(err)
+                time.sleep(3)
 
         sending_socket.close()
         # after sending data I reset the dictionary to not keep in ram useless data
@@ -95,6 +99,15 @@ class Device:
 
     def create_file(self):
         open(str(self.log_filename), 'w').close()
+def signal_handler(signal, frame):
+    print('Closing device (Ctrl+C pressed)')
+    print("Exiting...")
+    sys.exit(0)
+
+        
+        
+        
+signal.signal(signal.SIGINT, signal_handler)
 
 def main():
     current_environment = Environment()

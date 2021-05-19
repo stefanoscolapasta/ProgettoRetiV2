@@ -28,22 +28,12 @@ class TcpServer:
     def get_buffer_size(self):
         return self.buffer_size
 
+server = TcpServer()
+
 def main():
+    global server
     simulation = Simulation()
-    server = TcpServer()
-
-    def signal_handler(signal, frame):
-        print('Closing server (Ctrl+C pressed)')
-        try:
-            if server.get_tcp_sock():
-                server.close_server_socket()
-        finally:
-            print("Exiting...")
-            sys.exit(0)
-
     #interrompe l'esecuzione se da tastiera arriva la sequenza (CTRL + C) 
-    signal.signal(signal.SIGINT, signal_handler)
-
     try:
         while True:
             print ('Ready to serve...')
@@ -97,8 +87,6 @@ def main():
         pass
 
     server.close_server_socket()
-    
-    
 
 def print_measurements(data):
     for address in data.keys():
@@ -112,5 +100,17 @@ def print_measurements(data):
         print("\n\n") 
 
 
+
+def signal_handler(signal, frame):
+    global server
+    print('Closing server (Ctrl+C pressed)')
+    try:
+        if server.get_tcp_sock():
+            server.close_server_socket()
+    finally:
+        print("Exiting...")
+        sys.exit(0)
+        
+signal.signal(signal.SIGINT, signal_handler)
 if __name__ == '__main__':
     main()
