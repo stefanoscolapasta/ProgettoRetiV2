@@ -11,3 +11,6 @@ def print_packet_header(pkt, origin):
     
 def print_divider():
     print("-"*80)
+
+def print_pkt_size(pkt):
+    print("Size of data received: ", str(len(pkt)), "Bytes")

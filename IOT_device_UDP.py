@@ -8,13 +8,13 @@ import utils
 
 class Device:
     daily_measurements = []
-    maximum_number_of_measurements_to_be_sent = 5
+    maximum_number_of_measurements_to_be_sent = 6
     empty_payload = ""
     unassigned_ip = "0.0.0.0"
 
     def __init__(self, mac_address):
         self.sim = Simulation()
-        self.log_filename = "DailyDeviceLog_" + str(mac_address) + ".json" 
+        self.log_filename = "DailyDeviceLog_" + str(mac_address).replace(":", "_") + ".json" 
         self.mac_address = mac_address
         # richiesta di un indirizzo ip dal dhcp
         print("Device requesting Ip address from DHCP server")
@@ -33,7 +33,8 @@ class Device:
             self.empty_payload
         )), nc.dhcp_address)
 
-        data, server = dhcp_request_socket.recvfrom(4096)
+        data, server = dhcp_request_socket.recvfrom(1024)
+        utils.print_pkt_size(data)
         pkt = pickle.loads(data)
         
         utils.print_packet_header(pkt, "DHCP SERVER")
@@ -73,8 +74,8 @@ class Device:
                     nc.gateway_address
                 )
                 sending_socket.settimeout(2)
-                data, gateway_address = sending_socket.recvfrom(4096) # attesa di conferma da parte del gateway
-                   
+                data, address = sending_socket.recvfrom(1024) # attesa di conferma da parte del gateway
+                utils.print_pkt_size(data)
                 if data:
                     pkt = pickle.loads(data)
                     utils.print_divider()
@@ -89,7 +90,6 @@ class Device:
                 print("Timeout occurred, trying again...")
 
         sending_socket.close()
-        time.sleep(2)
         # after sending data I reset the dictionary to not keep in ram useless data
         self.daily_measurements.clear()    
 
@@ -103,7 +103,7 @@ def main():
     while True:
         print("Adding new measurement")
         device.add_new_measurement(current_environment.get_current_measurement())
-        time.sleep(1)
+        time.sleep(4) #una misurazione ogni 4 ore
 
 
 if __name__ == '__main__':

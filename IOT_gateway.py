@@ -35,6 +35,7 @@ class SimpleDhcp(Thread):
             print('\n\rWaiting to receive message...')
             # ascolto richieste di indirizzi ip
             data, address = self.dhcp_sock.recvfrom(1024)
+            utils.print_pkt_size(data)
             pkt = pickle.loads(data)
             utils.print_packet_header(pkt, "IOT DEVICE")
             mac_address = pkt.get_source_mac()
@@ -96,8 +97,9 @@ class Gateway:
         except Exception as error:
             print(error)
         message = server_socket.recv(1024)
+        utils.print_pkt_size(message)
         server_socket.close()
-
+        
         pkt = pickle.loads(message)
 
         utils.print_packet_header(pkt, "SERVER")
@@ -136,8 +138,8 @@ def main():
     # Attendo che i devices si colleghino
     while True:
         print("Gateway waiting to receive data from devices...\n")
-        data, real_address = gateway.get_udp_sock().recvfrom(4096)
-
+        data, real_address = gateway.get_udp_sock().recvfrom(1024)
+        utils.print_pkt_size(data)
         arrival_time = time.time_ns()
         
         pkt = pickle.loads(data)
@@ -158,7 +160,7 @@ def main():
             gateway.confirm_reception(real_address, pkt)
             # non appena ho ricevuto le misurazioni dagli n device invio
             # i dati al server    
-            n=2
+            n=4
             if (len(gateway.get_devices().keys())) == n:
                 gateway.send_data_to_server()
         else:

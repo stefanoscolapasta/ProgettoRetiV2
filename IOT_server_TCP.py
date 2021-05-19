@@ -13,6 +13,7 @@ class TcpServer:
         self.server_socket = sk.socket(sk.AF_INET, sk.SOCK_STREAM)
         self.server_socket.bind(('localhost', self.server_port))
         self.server_socket.listen(1)
+        self.buffer_size = 4096
 
     def get_tcp_sock(self):
         return self.server_socket
@@ -22,6 +23,9 @@ class TcpServer:
 
     def get_correct_gateway_ip_address(self):
         return self.sim.get_gateway_send_ip()
+
+    def get_buffer_size(self):
+        return self.buffer_size
 
 def main():
     simulation = Simulation()
@@ -33,9 +37,10 @@ def main():
               
         try:
             print("Waiting to receive data...")
-            message = connection_socket.recv(1024)
+            message = connection_socket.recv(server.get_buffer_size())
+            utils.print_pkt_size(message)
             arrival_time = time.time_ns()      
-            pkt = pickle.loads(message)
+            pkt = pickle.loads(message) 
             time_for_receipt = arrival_time - pkt.get_sending_time()
             utils.print_divider()
             print("DATA RECEIVED")
