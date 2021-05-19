@@ -15,6 +15,7 @@ class SimpleDhcp(Thread):
         self.arp_table = {}
         self.network_number = "192.168.1."
         self.arp_table[self.sim.get_gateway_recv_mac()] = self.sim.get_gateway_recv_ip()
+        self.running = True
 
     def get_dhcp_sock(self):
         return self.dhcp_sock
@@ -31,7 +32,7 @@ class SimpleDhcp(Thread):
         return self.arp_table
 
     def run(self):
-        while True:
+        while self.running:
             print('\n\rWaiting to receive message...')
             # ascolto richieste di indirizzi ip
             data, address = self.dhcp_sock.recvfrom(1024)
@@ -55,6 +56,8 @@ class SimpleDhcp(Thread):
                 self.arp_table[pkt.get_source_mac()]
             )) , address)
 
+    def stop_thread(self):
+        self.running = False
 
 class Gateway:
     DHCP_PORT = 1075
@@ -95,6 +98,7 @@ class Gateway:
                 ))
             )
         except Exception as error:
+            print("Unable to send data")
             print(error)
         message = server_socket.recv(1024)
         utils.print_pkt_size(message)
@@ -113,7 +117,7 @@ class Gateway:
         self.get_devices().clear()
     
     
-    def send_answer(self, address, pkt, message):
+    def __send_answer(self, address, pkt, message):
         self.get_udp_sock().sendto(
             pickle.dumps(Packet(self.sim.get_gateway_recv_mac(),
                 pkt.get_source_mac(),
@@ -124,10 +128,10 @@ class Gateway:
         ), address)
 
     def confirm_reception(self, address, pkt):
-        self.send_answer(address, pkt, "Measurements received")
+        self.__send_answer(address, pkt, "Measurements received")
 
     def discard_reception(self, address, pkt):
-        self.send_answer(address, pkt, "Wrong Ip address")
+        self.__send_answer(address, pkt, "Wrong Ip address")
 
 
 
